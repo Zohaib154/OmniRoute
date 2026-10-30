@@ -1171,16 +1171,16 @@ export default function HomePageClient({ machineId }: HomePageClientProps) {
               </p>
             </div>
             <Link
-              href="/dashboard/orchestration"
+              href="/dashboard/team"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white hover:opacity-90 transition-opacity"
             >
               <Icon name="groups" size={16} />
               Open Team
             </Link>
           </div>
-          <div className="w-full h-[360px] rounded-lg border border-border overflow-hidden bg-bg/50">
+          <div className="w-full h-[380px] rounded-lg border border-border overflow-hidden bg-bg/50">
             <iframe
-              src="/dashboard/orchestration"
+              src="/dashboard/team"
               className="w-full h-full border-0"
               title="Team Canvas"
             />

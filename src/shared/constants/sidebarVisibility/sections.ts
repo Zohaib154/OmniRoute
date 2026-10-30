@@ -81,9 +81,9 @@ const OMNI_PROXY_ITEMS: readonly SidebarItemDefinition[] = [
   },
   {
     id: "orchestration",
-    href: "/dashboard/orchestration",
+    href: "/dashboard/team",
     i18nKey: "teamOrchestrator",
-    labelFallback: "Team Orchestrator",
+    labelFallback: "Team",
     subtitleKey: "teamSubtitle",
     subtitleFallback: "Multi-model team workflow",
     icon: "groups",

@@ -89,7 +89,7 @@ function TabList({
         {TABS.map((tb) => (
           // No TabsContent: the panels below are rendered by the page itself.
           <TabsTrigger key={tb} value={tb} aria-controls={undefined}>
-            {t(TAB_KEY[tb])}
+            {tb === "agents" ? "Team" : t(TAB_KEY[tb])}
           </TabsTrigger>
         ))}
       </TabsList>
