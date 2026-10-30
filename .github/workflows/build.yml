@@ -61,13 +61,41 @@ jobs:
           OMNIROUTE_BUILD_MEMORY_MB: "10240"
           OMNIROUTE_USE_TURBOPACK: "0"
 
-      - name: Archive build outputs
+      - name: Archive build outputs (Separate clean packages)
         run: |
-          tar -czf omniroute-build.tar.gz .build dist
+          # Add launcher scripts for PC (Linux / Windows)
+          cat << 'EOF' > .build/next/standalone/run.sh
+          #!/bin/sh
+          export PORT="${PORT:-20128}"
+          echo "Starting OmniRoute on http://localhost:$PORT..."
+          exec node server.js
+          EOF
+          chmod +x .build/next/standalone/run.sh
 
-      - name: Upload build artifact
+          cat << 'EOF' > .build/next/standalone/run.bat
+          @echo off
+          set PORT=20128
+          echo Starting OmniRoute on http://localhost:%PORT%...
+          node server.js
+          pause
+          EOF
+
+          # Package standalone server for PC (excludes Next.js compilation cache)
+          (cd .build/next/standalone && zip -r -q ../../../omniroute-server-pc.zip .)
+
+          # Package CLI bundle
+          (cd dist && zip -r -q ../omniroute-cli.zip .)
+
+      - name: Upload OmniRoute Server (Windows / Linux PC)
         uses: actions/upload-artifact@v4
         with:
-          name: omniroute-build
-          path: omniroute-build.tar.gz
-          retention-days: 7
+          name: omniroute-server-pc
+          path: omniroute-server-pc.zip
+          retention-days: 14
+
+      - name: Upload OmniRoute CLI
+        uses: actions/upload-artifact@v4
+        with:
+          name: omniroute-cli
+          path: omniroute-cli.zip
+          retention-days: 14
