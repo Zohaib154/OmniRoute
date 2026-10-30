@@ -22,6 +22,7 @@ import { copyToClipboard } from "@/shared/utils/clipboard";
 import { getProviderDisplayLabel } from "@/shared/utils/providerDisplayLabel";
 import { useIsElectron, useOpenExternal } from "@/shared/hooks/useElectron";
 import { HomeProviderTopologySection } from "./HomeProviderTopologySection";
+import { HomeTeamWorkflowSection } from "./HomeTeamWorkflowSection";
 import { shouldShowProviderTopologyOnHome } from "./homeAppearance";
 import ManualUpdateCommand from "./ManualUpdateCommand";
 import HomeRecentRequests from "../home/HomeRecentRequests";
@@ -1155,38 +1156,7 @@ export default function HomePageClient({ machineId }: HomePageClientProps) {
       )}
 
       {/* Team Workflow Canvas Visual on Dashboard */}
-      <section className="flex flex-col gap-3 mt-4">
-        <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="flex size-2 rounded-full bg-primary animate-pulse" />
-                <h2 className="text-base font-semibold">Team Workflow</h2>
-                <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-primary/10 text-primary border border-primary/20">
-                  Active
-                </span>
-              </div>
-              <p className="text-xs text-text-muted mt-1">
-                Multi-Node agent pipeline: <strong>Agent-1</strong> (Frontline) → <strong>Boss-1</strong> (Planner) → <strong>Workers</strong> (Parallel) → <strong>Memory</strong>
-              </p>
-            </div>
-            <Link
-              href="/dashboard/team"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white hover:opacity-90 transition-opacity"
-            >
-              <Icon name="groups" size={16} />
-              Open Team
-            </Link>
-          </div>
-          <div className="w-full h-[380px] rounded-lg border border-border overflow-hidden bg-bg/50">
-            <iframe
-              src="/dashboard/team"
-              className="w-full h-full border-0"
-              title="Team Canvas"
-            />
-          </div>
-        </div>
-      </section>
+      <HomeTeamWorkflowSection />
 
       {/* Provider Models Modal */}
       {selectedProvider && (

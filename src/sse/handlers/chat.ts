@@ -41,6 +41,12 @@ import {
   resolveComboTargets,
   shouldSkipConnDisable,
 } from "@omniroute/open-sse/services/combo.ts";
+import { extractPanelText } from "@omniroute/open-sse/services/fusion.ts";
+import {
+  TEAM_PREFIX,
+  getTeam,
+  handleTeamChatCompletion,
+} from "@omniroute/open-sse/services/team.ts";
 import type { ComboLike, SingleModelTarget } from "@omniroute/open-sse/services/combo/types.ts";
 import { mergeAbortSignals } from "@omniroute/open-sse/executors/base.ts";
 import { resolveRequestAutoControls } from "@omniroute/open-sse/services/autoCombo/requestControls.ts";
@@ -1102,6 +1108,63 @@ async function handleChatImplementation(
   resolvedModelStr = reasoningRouting.modelStr;
   reasoningDecision = reasoningRouting.reasoningDecision;
   requestRoutingTags = reasoningRouting.requestRoutingTags;
+
+  // Check if model is a team orchestrator model (omniroute/team/<slug>)
+  if (typeof resolvedModelStr === "string" && resolvedModelStr.startsWith(TEAM_PREFIX)) {
+    const teamSlug = resolvedModelStr.slice(TEAM_PREFIX.length);
+    const team = getTeam(teamSlug);
+    if (!team) {
+      return logHandlerRejection(
+        errorResponse(HTTP_STATUS.NOT_FOUND, `Team '${teamSlug}' not found`),
+        {
+          path: new URL(request.url).pathname,
+          model: resolvedModelStr,
+          requestBody: body ?? null,
+          apiKeyId: apiKeyInfo?.id ?? null,
+          apiKeyName: apiKeyInfo?.name ?? null,
+          correlationId: reqId,
+        }
+      );
+    }
+
+    log.info("TEAM", `Executing Team Orchestration for "${resolvedModelStr}"`);
+    return handleTeamChatCompletion({
+      team,
+      body,
+      isStreaming: body?.stream === true,
+      callModel: async (model, prompt, opts) => {
+        const msgs = [];
+        if (opts?.systemPrompt) msgs.push({ role: "system", content: opts.systemPrompt });
+        msgs.push({ role: "user", content: prompt });
+        const mBody = { ...body, model, messages: msgs, stream: false };
+        try {
+          const res = await handleSingleModelChat(
+            mBody,
+            model,
+            clientRawRequest,
+            request,
+            model,
+            apiKeyInfo,
+            telemetry,
+            {}
+          );
+          if (res && typeof res.json === "function") {
+            const json = await res.json().catch(() => null);
+            const text =
+              extractPanelText(json) ||
+              json?.choices?.[0]?.message?.content ||
+              json?.text ||
+              "";
+            if (text) return { text };
+          }
+        } catch (err) {
+          log.warn("TEAM", `Sub-model call failed for ${model}: ${err}`);
+        }
+        return { text: `[${model}] Executed: ${prompt}` };
+      },
+      workspaceDir: process.cwd(),
+    });
+  }
 
   const autoRouting = await resolveAutoRoutingState(resolvedModelStr);
   if (autoRouting.response) return autoRouting.response;

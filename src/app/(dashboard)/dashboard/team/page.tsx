@@ -1,14 +1,20 @@
-import { Suspense } from "react";
-import TeamPageClient from "./TeamPageClient";
+import dynamic from "next/dynamic";
 
-export async function generateMetadata() {
-  return { title: "Team Orchestrator", description: "Multi-Model Team Orchestration Pipeline" };
-}
+export const metadata = {
+  title: "Team Orchestrator — OmniRoute",
+  description: "Multi-Model Team Orchestration Pipeline",
+};
+
+const TeamPageClient = dynamic(() => import("./TeamPageClient"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[calc(100dvh-5.5rem)] min-h-[640px] items-center justify-center p-4">
+      <div className="text-sm text-text-muted">Loading Team Orchestrator...</div>
+    </div>
+  ),
+});
 
 export default function TeamPage() {
-  return (
-    <Suspense fallback={null}>
-      <TeamPageClient />
-    </Suspense>
-  );
+  return <TeamPageClient />;
 }
+

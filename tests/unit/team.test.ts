@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runTeam, DEFAULT_TEAM_RULES, hasMultipleParts } from "../../open-sse/services/team.ts";
+import { runTeam, hasMultipleParts } from "../../open-sse/services/team.ts";
 
 test("simple query answered directly by agent", async () => {
   const calls: string[] = [];
@@ -77,3 +77,190 @@ test("hasMultipleParts", () => {
   assert.equal(hasMultipleParts("hello"), false);
   assert.equal(hasMultipleParts("step 1 do"), true);
 });
+
+test("DEFAULT_TEAM has valid orchestration nodes and connections", async () => {
+  const { DEFAULT_TEAM } = await import("../../open-sse/services/team.ts");
+  assert.equal(DEFAULT_TEAM.slug, "dev-team");
+  assert.ok(Array.isArray(DEFAULT_TEAM.nodes));
+  assert.ok(DEFAULT_TEAM.nodes!.length >= 4);
+  const agent = DEFAULT_TEAM.nodes!.find((n) => n.type === "agent");
+  const planner = DEFAULT_TEAM.nodes!.find((n) => n.type === "planner");
+  const workers = DEFAULT_TEAM.nodes!.filter((n) => n.type === "worker");
+  const memory = DEFAULT_TEAM.nodes!.find((n) => n.type === "memory");
+  assert.ok(agent, "agent node should exist");
+  assert.ok(planner, "planner node should exist");
+  assert.ok(workers.length >= 2, "workers should exist");
+  assert.ok(memory, "memory node should exist");
+});
+
+test("getTeam resolves default, registered, and synthesized teams", async () => {
+  const { getTeam, registerTeam } = await import("../../open-sse/services/team.ts");
+  const devTeam = getTeam("dev-team");
+  assert.ok(devTeam);
+  assert.equal(devTeam?.slug, "dev-team");
+
+  registerTeam({
+    id: "custom-alpha",
+    slug: "alpha-team",
+    name: "Alpha Squad",
+    nodes: [{ id: "a1", type: "agent", model: "test/m1" }],
+  });
+  const custom = getTeam("alpha-team");
+  assert.ok(custom);
+  assert.equal(custom?.name, "Alpha Squad");
+
+  const synth = getTeam("qa-auto");
+  assert.ok(synth);
+  assert.equal(synth?.slug, "qa-auto");
+  assert.equal(synth?.name, "Qa-auto Team");
+});
+
+test("extractLastUserMessage extracts content across various body shapes", async () => {
+  const { extractLastUserMessage } = await import("../../open-sse/services/team.ts");
+
+  // String prompt
+  assert.equal(extractLastUserMessage({ prompt: "do task" }), "do task");
+
+  // OpenAI messages
+  assert.equal(
+    extractLastUserMessage({
+      messages: [
+        { role: "system", content: "sys" },
+        { role: "user", content: "hello user" },
+        { role: "assistant", content: "reply" },
+        { role: "user", content: "follow up" },
+      ],
+    }),
+    "follow up"
+  );
+
+  // Content array parts
+  assert.equal(
+    extractLastUserMessage({
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "part 1" },
+            { type: "text", text: "part 2" },
+          ],
+        },
+      ],
+    }),
+    "part 1\npart 2"
+  );
+
+  // Fallback to any content
+  assert.equal(
+    extractLastUserMessage({
+      messages: [{ role: "assistant", content: "only assistant" }],
+    }),
+    "only assistant"
+  );
+
+  // Empty
+  assert.equal(extractLastUserMessage({}), "");
+  assert.equal(extractLastUserMessage(null), "");
+});
+
+test("handleTeamChatCompletion returns non-streaming JSON response", async () => {
+  const { handleTeamChatCompletion, getTeam } = await import("../../open-sse/services/team.ts");
+  const team = getTeam("dev-team")!;
+
+  const resp = await handleTeamChatCompletion({
+    team,
+    body: {
+      model: "omniroute/team/dev-team",
+      messages: [{ role: "user", content: "hello quick task" }],
+    },
+    isStreaming: false,
+    callModel: async () => ({ text: "team answer completed" }),
+  });
+
+  assert.equal(resp.status, 200);
+  assert.equal(resp.headers.get("Content-Type"), "application/json");
+  const json = (await resp.json()) as { choices: Array<{ message: { content: string } }> };
+  assert.equal(json.choices[0].message.content, "team answer completed");
+});
+
+test("handleTeamChatCompletion streams SSE chunks", async () => {
+  const { handleTeamChatCompletion, getTeam } = await import("../../open-sse/services/team.ts");
+  const team = getTeam("dev-team")!;
+
+  const resp = await handleTeamChatCompletion({
+    team,
+    body: {
+      model: "omniroute/team/dev-team",
+      messages: [{ role: "user", content: "step 1 plan and also step 2 execute" }],
+      stream: true,
+    },
+    isStreaming: true,
+    callModel: async (_m, prompt) => {
+      if (/JSON plan/.test(prompt)) {
+        return { text: '[{"id":"t1","part":"work"}]' };
+      }
+      return { text: "worker done" };
+    },
+  });
+
+  assert.equal(resp.status, 200);
+  assert.ok(resp.headers.get("Content-Type")?.includes("text/event-stream"));
+
+  const text = await resp.text();
+  assert.ok(text.includes("chat.completion.chunk"));
+  assert.ok(text.includes("[DONE]"));
+});
+
+test("handleChat routes omniroute/team/<slug> to team execution", async () => {
+  const { handleChat } = await import("../../src/sse/handlers/chat.ts");
+  const request = new Request("http://localhost:20128/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "omniroute/team/dev-team",
+      messages: [{ role: "user", content: "hello quick query" }],
+    }),
+  });
+
+  const response = await handleChat(request, null, {
+    model: "omniroute/team/dev-team",
+    messages: [{ role: "user", content: "hello quick query" }],
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("X-OmniRoute-Team"), "dev-team");
+  const json = (await response.json()) as {
+    model: string;
+    choices: Array<{ message: { content: string } }>;
+  };
+  assert.equal(json.model, "omniroute/team/dev-team");
+  assert.ok(json.choices[0].message.content.length > 0);
+});
+
+test("handleChat routes streaming omniroute/team/<slug> to SSE stream", async () => {
+  const { handleChat } = await import("../../src/sse/handlers/chat.ts");
+  const request = new Request("http://localhost:20128/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "omniroute/team/dev-team",
+      messages: [{ role: "user", content: "step 1 plan and also step 2 execute" }],
+      stream: true,
+    }),
+  });
+
+  const response = await handleChat(request, null, {
+    model: "omniroute/team/dev-team",
+    messages: [{ role: "user", content: "step 1 plan and also step 2 execute" }],
+    stream: true,
+  });
+
+  assert.equal(response.status, 200);
+  assert.ok(response.headers.get("Content-Type")?.includes("text/event-stream"));
+  const text = await response.text();
+  assert.ok(text.includes("chat.completion.chunk"));
+  assert.ok(text.includes("[DONE]"));
+});
+
+
+

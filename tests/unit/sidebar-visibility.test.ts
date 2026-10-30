@@ -49,6 +49,7 @@ test("primary sidebar items place limits after cache", () => {
       "combos",
       "combos-live",
       "quota",
+      "orchestration",
       "costs-quota-share",
       "context-settings",
       "context-combos",
@@ -69,7 +70,6 @@ test("primary sidebar items place limits after cache", () => {
       "acp-agents",
       "cloud-agents",
       "conductor",
-      "orchestration", // +1: orchestration (PR-2 of the orchestration canvas)
       "agent-bridge",
       "traffic-inspector",
       "discovery",
@@ -122,9 +122,13 @@ test("sidebar visibility drops stale entries from saved settings", () => {
     false
   );
   assert.equal((allSidebarItemIds as string[]).includes("settings"), false);
-  assert.deepEqual(sidebarVisibility.normalizeHiddenSidebarItems(["auto-combo" as any, "logs"]), [
-    "logs",
-  ]);
+  assert.deepEqual(
+    sidebarVisibility.normalizeHiddenSidebarItems([
+      "auto-combo" as unknown as sidebarVisibility.HideableSidebarItemId,
+      "logs",
+    ]),
+    ["logs"]
+  );
 });
 
 test("help sidebar exposes changelog after docs and issues", () => {

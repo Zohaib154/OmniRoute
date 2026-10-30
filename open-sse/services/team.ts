@@ -88,13 +88,17 @@ async function normalizeModelResult(raw: unknown): Promise<string> {
           ? (raw as { clone: () => unknown }).clone()
           : raw;
       const json = await (cloned as { json: () => Promise<unknown> }).json();
+      const rec = json as Record<string, unknown> | null | undefined;
+      const choices = Array.isArray(rec?.choices) ? (rec.choices as Array<Record<string, unknown>>) : undefined;
+      const firstChoice = choices?.[0];
+      const message = firstChoice?.message as Record<string, unknown> | undefined;
       const content =
-        (json as any)?.choices?.[0]?.message?.content ??
-        (json as any)?.choices?.[0]?.text ??
-        (json as any)?.text ??
-        (json as any)?.content ??
-        (json as any)?.output ??
-        (json as any)?.result;
+        message?.content ??
+        firstChoice?.text ??
+        rec?.text ??
+        rec?.content ??
+        rec?.output ??
+        rec?.result;
       if (typeof content === "string") return content;
       if (content != null) return String(content);
     } catch {
@@ -121,7 +125,15 @@ async function normalizeModelResult(raw: unknown): Promise<string> {
     return (raw as { result: string }).result;
   }
   if (Array.isArray((raw as { choices?: unknown[] })?.choices)) {
-    const c = (raw as { choices: any[] }).choices[0];
+    const c = (
+      raw as {
+        choices: Array<{
+          message?: { content?: unknown };
+          text?: unknown;
+          delta?: { content?: unknown };
+        }>;
+      }
+    ).choices[0];
     const content = c?.message?.content ?? c?.text ?? c?.delta?.content;
     if (typeof content === "string") return content;
   }
@@ -215,10 +227,10 @@ export async function runTeam(
 
   // 2. PARALLEL WORKER EXECUTION
   stream(`⚡ [Team] Dispatching ${plan.length} sub-tasks to parallel workers...\n\n`);
-  const workerPromises = (plan as any[]).map(async (task: any, idx: number) => {
+  const workerPromises = plan.map(async (task, idx: number) => {
     const worker = workerNodes[idx % workerNodes.length];
     const taskId = task?.id ?? `t${idx + 1}`;
-    const part = task?.part ?? task?.description ?? promptText;
+    const part = task?.part ?? promptText;
     const files = Array.isArray(task?.files) ? task.files : [];
     const workerPrompt = `Assigned Sub-Task ${taskId}: ${part}\nTarget Files: ${files.join(", ")}`;
 
@@ -330,3 +342,291 @@ export const executeTeam = runTeam;
 export const runTeamOrchestration = runTeam;
 export default runTeam;
 export { TEAM_PREFIX as teamPrefix };
+
+export const DEFAULT_TEAM: TeamDefinition = {
+  id: "team-default",
+  name: "Multi-Agent Engineering Team",
+  slug: "dev-team",
+  nodes: [
+    {
+      id: "agent-1",
+      type: "agent",
+      name: "Agent-1 (Frontline)",
+      model: "claude-sonnet-4-6",
+      command: "/agent",
+      systemPrompt:
+        "You are the frontline agent. Receive user prompts, coordinate execution, and deliver the final integrated response.",
+      x: 60,
+      y: 160,
+    },
+    {
+      id: "boss-1",
+      type: "planner",
+      name: "Boss-1 (Planner)",
+      model: "gemini-2.5-pro",
+      command: "/boss",
+      systemPrompt:
+        "Analyze the user prompt and generate an optimal JSON sub-task execution plan.",
+      x: 320,
+      y: 160,
+    },
+    {
+      id: "worker-1",
+      type: "worker",
+      name: "Worker-1 (Backend)",
+      model: "deepseek-v3.2",
+      command: "/worker",
+      specialty: "backend",
+      systemPrompt: "Execute backend and logic sub-tasks thoroughly.",
+      x: 580,
+      y: 80,
+    },
+    {
+      id: "worker-2",
+      type: "worker",
+      name: "Worker-2 (Frontend)",
+      model: "gpt-5-mini",
+      command: "/worker",
+      specialty: "frontend",
+      systemPrompt: "Execute frontend, UI/UX and styling components.",
+      x: 580,
+      y: 240,
+    },
+    {
+      id: "memory-1",
+      type: "memory",
+      name: "Memory-1 (Brain)",
+      model: "gemini-2.5-flash",
+      command: "/memory",
+      systemPrompt:
+        "Record architecture decisions and task learnings to .brain/brain.json.",
+      x: 840,
+      y: 160,
+    },
+  ],
+  connections: [
+    { from: "agent-1", to: "boss-1" },
+    { from: "boss-1", to: "worker-1" },
+    { from: "boss-1", to: "worker-2" },
+    { from: "worker-1", to: "memory-1" },
+    { from: "worker-2", to: "memory-1" },
+    { from: "memory-1", to: "agent-1" },
+  ],
+};
+
+const teamsRegistry = new Map<string, TeamDefinition>();
+teamsRegistry.set(DEFAULT_TEAM.slug ?? "dev-team", DEFAULT_TEAM);
+teamsRegistry.set(DEFAULT_TEAM.id ?? "team-default", DEFAULT_TEAM);
+
+export function registerTeam(team: TeamDefinition): void {
+  if (team.slug) teamsRegistry.set(team.slug, team);
+  if (team.id) teamsRegistry.set(team.id, team);
+}
+
+export function getRegisteredTeams(): TeamDefinition[] {
+  const seen = new Set<string>();
+  const list: TeamDefinition[] = [];
+  for (const team of teamsRegistry.values()) {
+    const key = team.id || team.slug || "";
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      list.push(team);
+    }
+  }
+  return list;
+}
+
+export function getTeam(slugOrId: string): TeamDefinition | null {
+  if (!slugOrId) return null;
+  const normalized = slugOrId.trim();
+  const direct = teamsRegistry.get(normalized);
+  if (direct) return direct;
+
+  for (const team of teamsRegistry.values()) {
+    if (team.slug === normalized || team.id === normalized) {
+      return team;
+    }
+  }
+
+  // Synthesize default team configured for this slug
+  return {
+    ...DEFAULT_TEAM,
+    id: `team-${normalized}`,
+    slug: normalized,
+    name: `${normalized.charAt(0).toUpperCase() + normalized.slice(1)} Team`,
+  };
+}
+
+export function extractLastUserMessage(body: unknown): string {
+  if (!body || typeof body !== "object") return "";
+  const b = body as Record<string, unknown>;
+  if (typeof b.prompt === "string" && b.prompt) return b.prompt;
+
+  const messages = Array.isArray(b.messages)
+    ? (b.messages as Array<Record<string, unknown>>)
+    : Array.isArray(b.input)
+      ? (b.input as Array<Record<string, unknown>>)
+      : [];
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg && (msg.role === "user" || !msg.role)) {
+      if (typeof msg.content === "string") return msg.content;
+      if (Array.isArray(msg.content)) {
+        const textParts = (msg.content as Array<Record<string, unknown>>)
+          .map((part) => (typeof part?.text === "string" ? part.text : ""))
+          .filter(Boolean);
+        if (textParts.length > 0) return textParts.join("\n");
+      }
+    }
+  }
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (typeof msg?.content === "string" && msg.content) return msg.content;
+  }
+  return "";
+}
+
+export type HandleTeamChatOptions = {
+  team: TeamDefinition;
+  body: Record<string, unknown>;
+  isStreaming?: boolean;
+  callModel?: (model: string, prompt: string, opts?: { systemPrompt?: string }) => Promise<unknown>;
+  workspaceDir?: string;
+  onStreamChunk?: (chunk: string) => void;
+};
+
+export async function handleTeamChatCompletion(options: HandleTeamChatOptions): Promise<Response> {
+  const { team, body, isStreaming = false, callModel, workspaceDir, onStreamChunk } = options;
+  const userMessage = extractLastUserMessage(body);
+
+  if (isStreaming) {
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        const sendSse = (chunk: string) => {
+          if (typeof onStreamChunk === "function") {
+            try {
+              onStreamChunk(chunk);
+            } catch {
+              /* ignore */
+            }
+          }
+          const sseData = `data: ${JSON.stringify({
+            id: `chatcmpl-team-${Date.now()}`,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: (body.model as string) || `${TEAM_PREFIX}${team.slug}`,
+            choices: [
+              {
+                index: 0,
+                delta: { content: chunk },
+                finish_reason: null,
+              },
+            ],
+          })}\n\n`;
+          controller.enqueue(encoder.encode(sseData));
+        };
+
+        try {
+          const result = await runTeam(team, userMessage, {
+            callModel:
+              callModel ||
+              (async (m, p) => ({ text: `[${m}] Processed: ${p.slice(0, 80)}` })),
+            onStreamChunk: sendSse,
+            workspaceDir: workspaceDir || process.cwd(),
+          });
+
+          // Deliver final answer chunk if not already streamed
+          const isComplex = hasMultipleParts(userMessage) || userMessage.trim().startsWith("/team");
+          const finalContent = isComplex ? `\n\n${result.final}` : result.final;
+          const finalSse = `data: ${JSON.stringify({
+            id: `chatcmpl-team-${Date.now()}`,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: (body.model as string) || `${TEAM_PREFIX}${team.slug}`,
+            choices: [
+              {
+                index: 0,
+                delta: { content: finalContent },
+                finish_reason: "stop",
+              },
+            ],
+          })}\n\n`;
+          controller.enqueue(encoder.encode(finalSse));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : "Team execution error";
+          const errSse = `data: ${JSON.stringify({
+            error: {
+              message,
+              type: "team_error",
+            },
+          })}\n\n`;
+          controller.enqueue(encoder.encode(errSse));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-OmniRoute-Team": team.slug || "team",
+      },
+    });
+  }
+
+  // Non-streaming response
+  const result = await runTeam(team, userMessage, {
+    callModel:
+      callModel ||
+      (async (m, p) => ({ text: `[${m}] Processed: ${p.slice(0, 80)}` })),
+    onStreamChunk,
+    workspaceDir: workspaceDir || process.cwd(),
+  });
+
+  return new Response(
+    JSON.stringify({
+      id: `chatcmpl-team-${Date.now()}`,
+      object: "chat.completion",
+      created: Math.floor(Date.now() / 1000),
+      model: (body.model as string) || `${TEAM_PREFIX}${team.slug}`,
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: result.final,
+          },
+          finish_reason: "stop",
+        },
+      ],
+      usage: {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+      },
+      team: {
+        id: team.id,
+        slug: team.slug,
+        plan: result.plan,
+        workerResults: result.workerResults,
+      },
+    }),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "X-OmniRoute-Team": team.slug || "team",
+      },
+    }
+  );
+}
+
