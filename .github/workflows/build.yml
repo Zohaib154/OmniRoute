@@ -11,6 +11,7 @@ name: Build App
 # Dispatch this workflow by hand when a hosted build artefact is genuinely needed.
 on:
   workflow_dispatch:
+  push:
 
 permissions:
   contents: read
