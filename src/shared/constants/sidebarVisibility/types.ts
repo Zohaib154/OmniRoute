@@ -10,7 +10,6 @@ export const HIDEABLE_SIDEBAR_ITEM_IDS = [
   "combos",
   "combos-live",
   "quota",
-  "team",
   // OmniProxy > Compression Context (Settings → Combos → engines → Studio)
   "context-settings",
   "context-combos",

@@ -1154,16 +1154,16 @@ export default function HomePageClient({ machineId }: HomePageClientProps) {
         </div>
       )}
 
-      {/* Team Orchestrator Flow Canvas Visual on Dashboard */}
+      {/* Team Workflow Canvas Visual on Dashboard */}
       <section className="flex flex-col gap-3 mt-4">
         <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div>
               <div className="flex items-center gap-2">
                 <span className="flex size-2 rounded-full bg-primary animate-pulse" />
-                <h2 className="text-base font-semibold">Team Orchestrator</h2>
+                <h2 className="text-base font-semibold">Team Workflow</h2>
                 <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-primary/10 text-primary border border-primary/20">
-                  Pipeline Active
+                  Active
                 </span>
               </div>
               <p className="text-xs text-text-muted mt-1">
@@ -1171,18 +1171,18 @@ export default function HomePageClient({ machineId }: HomePageClientProps) {
               </p>
             </div>
             <Link
-              href="/team"
+              href="/dashboard/orchestration"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white hover:opacity-90 transition-opacity"
             >
               <Icon name="groups" size={16} />
-              Open Team Editor
+              Open Team
             </Link>
           </div>
-          <div className="w-full h-[320px] rounded-lg border border-border overflow-hidden bg-bg/50">
+          <div className="w-full h-[360px] rounded-lg border border-border overflow-hidden bg-bg/50">
             <iframe
-              src="/team"
+              src="/dashboard/orchestration"
               className="w-full h-full border-0"
-              title="Team Orchestrator Canvas"
+              title="Team Canvas"
             />
           </div>
         </div>

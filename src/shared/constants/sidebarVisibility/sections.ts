@@ -80,20 +80,20 @@ const OMNI_PROXY_ITEMS: readonly SidebarItemDefinition[] = [
     icon: "tune",
   },
   {
+    id: "orchestration",
+    href: "/dashboard/orchestration",
+    i18nKey: "teamOrchestrator",
+    labelFallback: "Team Orchestrator",
+    subtitleKey: "teamSubtitle",
+    subtitleFallback: "Multi-model team workflow",
+    icon: "groups",
+  },
+  {
     id: "costs-quota-share",
     href: "/dashboard/costs/quota-share",
     i18nKey: "costsQuotaShare",
     subtitleKey: "costsQuotaShareSubtitle",
     icon: "pie_chart",
-  },
-  {
-    id: "team",
-    href: "/team",
-    i18nKey: "team",
-    labelFallback: "Team Orchestrator",
-    subtitleKey: "teamSubtitle",
-    subtitleFallback: "Multi-model team workflow",
-    icon: "groups",
   },
 ];
 
@@ -269,13 +269,6 @@ const TOOLS_GROUP: SidebarItemGroup = {
       icon: "account_tree",
       labelFallback: "Conductor",
       subtitleFallback: "CLI-agent fleet",
-    },
-    {
-      id: "orchestration",
-      href: "/dashboard/orchestration",
-      i18nKey: "orchestration",
-      subtitleKey: "orchestrationSubtitle",
-      icon: "account_tree",
     },
     {
       id: "agent-bridge",

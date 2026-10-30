@@ -1212,7 +1212,7 @@
     "modelLockout": "Model Lockout",
     "settingsAdvanced": "Advanced",
     "omniProxySection": "OmniProxy",
-    "team": "Team Orchestrator",
+    "teamOrchestrator": "Team",
     "teamSubtitle": "Multi-model team workflow",
     "quotaTracker": "Provider Quota",
     "providerQuota": "Provider Quota",
@@ -14987,9 +14987,9 @@
     "micDenied": "Microphone unavailable or permission denied"
   },
   "orchestration": {
-    "title": "Orchestration",
-    "description": "Everything OmniRoute is running right now — agents, fleet and routing",
-    "tabAgents": "Agents",
+    "title": "Team",
+    "description": "Multi-model team workflow and execution canvas",
+    "tabAgents": "Team",
     "tabRouting": "Routing",
     "tabOverview": "Overview",
     "tabHistory": "History",
