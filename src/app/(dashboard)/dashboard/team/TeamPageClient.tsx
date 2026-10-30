@@ -465,6 +465,11 @@ export default function TeamPageClient() {
 
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const simulationTimerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Synchronize state changes to localStorage
   useEffect(() => {
@@ -750,6 +755,17 @@ export default function TeamPageClient() {
 
     simulationTimerRef.current = [t1, t2, t3, t4, t5];
   }, [isSimulating]);
+
+  if (!mounted) {
+    return (
+      <div className="flex h-[calc(100dvh-5.5rem)] min-h-[640px] items-center justify-center p-4">
+        <div className="text-sm text-text-muted flex items-center gap-2">
+          <Icon name="progress_activity" size={18} className="animate-spin text-primary" />
+          Loading Team Orchestrator...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-[calc(100dvh-5.5rem)] min-h-[640px] p-4 gap-3 bg-bg text-text-main">
