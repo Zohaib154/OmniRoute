@@ -80,8 +80,43 @@ jobs:
           pause
           EOF
 
-          # Package standalone server for PC (excludes Next.js compilation cache)
-          (cd .build/next/standalone && zip -r -q ../../../omniroute-server-pc.zip .)
+          # Add Termux Android startup script and instructions
+          cat << 'EOF' > .build/next/standalone/start-termux.sh
+          #!/data/data/com.termux/files/usr/bin/bash
+          export PORT="${PORT:-20128}"
+          export HOST="0.0.0.0"
+          export HOSTNAME="0.0.0.0"
+          mkdir -p "$HOME/.cache"
+          export XDG_CACHE_HOME="$HOME/.cache"
+
+          echo "============================================="
+          echo "  Starting OmniRoute on Termux (Android)"
+          echo "  Local Web UI: http://localhost:$PORT"
+          echo "============================================="
+
+          exec node server.js
+          EOF
+          chmod +x .build/next/standalone/start-termux.sh
+
+          cat << 'EOF' > .build/next/standalone/README-TERMUX.txt
+          === OmniRoute on Termux (Android) ===
+
+          Prerequisites:
+            pkg update && pkg install nodejs -y
+
+          Run:
+            chmod +x start-termux.sh
+            ./start-termux.sh
+
+          Open your browser on Android:
+            http://localhost:20128
+          EOF
+
+          # Package standalone server for PC (Windows / Linux)
+          (cd .build/next/standalone && zip -r -q ../../../omniroute-server-pc.zip . -x "start-termux.sh" "README-TERMUX.txt")
+
+          # Package dedicated Termux Android build
+          (cd .build/next/standalone && zip -r -q ../../../omniroute-termux-android.zip . -x "run.bat")
 
           # Package CLI bundle
           (cd dist && zip -r -q ../omniroute-cli.zip .)
@@ -91,6 +126,13 @@ jobs:
         with:
           name: omniroute-server-pc
           path: omniroute-server-pc.zip
+          retention-days: 14
+
+      - name: Upload OmniRoute for Termux (Android)
+        uses: actions/upload-artifact@v4
+        with:
+          name: omniroute-termux-android
+          path: omniroute-termux-android.zip
           retention-days: 14
 
       - name: Upload OmniRoute CLI
