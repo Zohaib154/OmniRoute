@@ -1154,6 +1154,40 @@ export default function HomePageClient({ machineId }: HomePageClientProps) {
         </div>
       )}
 
+      {/* Team Orchestrator Flow Canvas Visual on Dashboard */}
+      <section className="flex flex-col gap-3 mt-4">
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex size-2 rounded-full bg-primary animate-pulse" />
+                <h2 className="text-base font-semibold">Team Orchestrator</h2>
+                <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-primary/10 text-primary border border-primary/20">
+                  Pipeline Active
+                </span>
+              </div>
+              <p className="text-xs text-text-muted mt-1">
+                Multi-Node agent pipeline: <strong>Agent-1</strong> (Frontline) → <strong>Boss-1</strong> (Planner) → <strong>Workers</strong> (Parallel) → <strong>Memory</strong>
+              </p>
+            </div>
+            <Link
+              href="/team"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white hover:opacity-90 transition-opacity"
+            >
+              <Icon name="groups" size={16} />
+              Open Team Editor
+            </Link>
+          </div>
+          <div className="w-full h-[320px] rounded-lg border border-border overflow-hidden bg-bg/50">
+            <iframe
+              src="/team"
+              className="w-full h-full border-0"
+              title="Team Orchestrator Canvas"
+            />
+          </div>
+        </div>
+      </section>
+
       {/* Provider Models Modal */}
       {selectedProvider && (
         <ProviderModelsModal

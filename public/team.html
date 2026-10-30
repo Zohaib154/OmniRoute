@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmniRoute Teams</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'DM Sans', -apple-system, sans-serif; user-select: none; }
+input, textarea, select { user-select: text; font-family: inherit; }
+body { background: #0c0c0c; color: #ebf0ea; padding: 24px; min-height: 100vh; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.header h1 { font-size: 24px; font-weight: 700; color: #fff; }
+.header p { color: #888; font-size: 14px; margin-top: 4px; }
+.btn { padding: 8px 16px; border-radius: 6px; border: 1px solid #333; background: #18181b; color: #eee; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; }
+.btn:hover { background: #27272a; border-color: #555; }
+.btn.primary { background: #2563eb; border-color: #3b82f6; color: #fff; }
+.btn.primary:hover { background: #1d4ed8; }
+.btn.danger { background: #dc2626; border-color: #ef4444; color: #fff; }
+.btn.danger:hover { background: #b91c1c; }
+.btn.sm { padding: 4px 10px; font-size: 12px; }
+.input { width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #333; background: #18181b; color: #fff; font-size: 13px; margin-top: 4px; }
+.input:focus { border-color: #3b82f6; outline: none; }
+.lbl { display: block; font-size: 12px; font-weight: 600; color: #aaa; margin-top: 10px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.team-editor { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; background: #141416; border: 1px solid #27272a; border-radius: 10px; padding: 16px; }
+.team-editor-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.team-canvas-wrap { display: flex; gap: 16px; align-items: stretch; min-height: 560px; margin-top: 12px; }
+.team-canvas { display: block; flex: 1 1 0; min-width: 0; border-radius: 8px; background: #18181b; border: 1px solid #27272a; }
+.team-props { width: 320px; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 16px; overflow-y: auto; max-height: 680px; }
+.team-hint { font-size: 12px; color: #888; margin-top: 8px; line-height: 1.5; }
+.team-card { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+.team-card-head { display: flex; justify-content: space-between; align-items: center; }
+.team-name { font-weight: 600; font-size: 16px; color: #fff; }
+.mute { color: #888; font-size: 12px; }
+.mono { font-family: monospace; }
+.chip { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.chip.ok { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+.team-nodes-preview { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.node-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; border-radius: 12px; padding: 2px 8px; font-weight: 500; background: #27272a; color: #ccc; }
+.node-chip.agent { color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+.node-chip.planner { color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.3); }
+.node-chip.worker { color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); }
+.node-chip.memory { color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+.team-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.team-modal { background: #18181b; border: 1px solid #333; border-radius: 12px; padding: 24px; width: 440px; max-width: 90vw; max-height: 90vh; overflow-y: auto; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Teams Orchestrator</h1>
+    <p>Multi-model team workflow editor. Teams are exposed as <code>omniroute/team/&lt;slug&gt;</code> to any client.</p>
+  </div>
+  <div class="row">
+    <a href="/home" class="btn">← Back to Dashboard</a>
+    <button class="btn primary" id="btn-new-team">+ New Team</button>
+  </div>
+</div>
+
+<div id="team-editor" class="team-editor hidden"></div>
+
+<div id="teams-list"></div>
+
+<script>
+const DEFAULT_TEAM_MODEL = 'gemini-2.5-flash';
+const NODE_TYPES = [
+  { type: 'agent', label: 'Agent (Frontline)', color: '#d97706' },
+  { type: 'planner', label: 'Boss (Planner)', color: '#3b82f6' },
+  { type: 'worker', label: 'Worker', color: '#22c55e' },
+  { type: 'memory', label: 'Memory (Brain)', color: '#10b981' },
+];
+
+let teams = JSON.parse(localStorage.getItem('omniroute_teams') || '[]');
+if (!teams.length) {
+  teams = [{
+    id: 'team-default',
+    name: 'Dev Engineering Team',
+    slug: 'dev-team',
+    nodes: [
+      { id: 'agent-1', type: 'agent', name: 'Agent', model: 'gemini-2.5-flash', command: '/agent', x: 80, y: 180 },
+      { id: 'boss-1', type: 'planner', name: 'Boss', model: 'gemini-2.5-pro', command: '/boss', x: 280, y: 180 },
+      { id: 'worker-1', type: 'worker', name: 'Worker', model: 'deepseek-v3', specialty: 'backend', command: '/worker', x: 480, y: 180 },
+      { id: 'memory-1', type: 'memory', name: 'Memory', model: 'gemini-2.5-flash', command: '/memory', x: 700, y: 180 }
+    ],
+    connections: [
+      { from: 'agent-1', to: 'boss-1' },
+      { from: 'boss-1', to: 'worker-1' },
+      { from: 'worker-1', to: 'agent-1' }
+    ]
+  }];
+  localStorage.setItem('omniroute_teams', JSON.stringify(teams));
+}
+
+let activeTeam = null;
+let editorState = {
+  team: null,
+  nodes: [],
+  connections: [],
+  selected: null,
+  connectFrom: null,
+  connectMode: false,
+  zoom: 1
+};
+
+function saveTeams() {
+  localStorage.setItem('omniroute_teams', JSON.stringify(teams));
+  renderTeamsList();
+}
+
+function renderTeamsList() {
+  const container = document.getElementById('teams-list');
+  if (!teams.length) {
+    container.innerHTML = '<div class="mute" style="padding:20px;text-align:center">No teams created yet. Click "+ New Team" to build one.</div>';
+    return;
+  }
+  container.innerHTML = teams.map((t, idx) => `
+    <div class="team-card">
+      <div class="team-card-head">
+        <div>
+          <div class="team-name">${escapeHtml(t.name)}</div>
+          <div class="mute mono">omniroute/team/${escapeHtml(t.slug)} · ${(t.nodes || []).length} nodes</div>
+        </div>
+        <div class="row">
+          <button class="btn sm" onclick="editTeam(${idx})">Edit Workflow</button>
+          <button class="btn sm danger" onclick="deleteTeam(${idx})">Delete</button>
+        </div>
+      </div>
+      <div class="team-nodes-preview">
+        ${(t.nodes || []).map(n => `<span class="node-chip ${n.type}">${escapeHtml(n.name || n.type)} (${escapeHtml(n.model || 'auto')})</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function editTeam(idx) {
+  openEditor(teams[idx]);
+}
+
+function deleteTeam(idx) {
+  if (confirm('Delete this team?')) {
+    teams.splice(idx, 1);
+    saveTeams();
+  }
+}
+
+function openEditor(team) {
+  const editor = document.getElementById('team-editor');
+  editor.classList.remove('hidden');
+  editorState.team = JSON.parse(JSON.stringify(team));
+  editorState.nodes = editorState.team.nodes || [];
+  editorState.connections = editorState.team.connections || [];
+  editorState.selected = null;
+  editorState.connectFrom = null;
+  editorState.connectMode = false;
+  renderEditor();
+}
+
+function closeEditor() {
+  document.getElementById('team-editor').classList.add('hidden');
+}
+
+function renderEditor() {
+  const editor = document.getElementById('team-editor');
+  const selNode = editorState.selected ? editorState.nodes.find(n => n.id === editorState.selected) : null;
+
+  editor.innerHTML = `
+    <div class="team-editor-bar">
+      <input class="input" id="te-name" value="${escapeAttr(editorState.team.name)}" placeholder="Team Name" style="max-width:200px">
+      <input class="input" id="te-slug" value="${escapeAttr(editorState.team.slug)}" placeholder="Slug" style="max-width:160px">
+      <div class="row">
+        ${NODE_TYPES.map(nt => `<button class="btn sm" onclick="addNode('${nt.type}')">+ ${nt.label}</button>`).join('')}
+      </div>
+      <div class="row">
+        <button class="btn sm ${editorState.connectMode ? 'primary' : ''}" onclick="toggleConnect()">
+          ${editorState.connectMode ? (editorState.connectFrom ? 'Click target node...' : 'Click source node...') : 'Connect'}
+        </button>
+      </div>
+      <div class="row" style="margin-left:auto">
+        <button class="btn sm" onclick="closeEditor()">Cancel</button>
+        <button class="btn sm primary" onclick="saveCurrentTeam()">Save Team</button>
+      </div>
+    </div>
+    <div class="team-canvas-wrap">
+      <svg class="team-canvas" id="team-canvas" width="100%" height="600" style="background:#141416;background-image:radial-gradient(#27272a 1.5px, transparent 1.5px);background-size:24px 24px;">
+        <g id="canvas-g">
+          ${renderConnections()}
+          ${editorState.nodes.map(n => renderNode(n)).join('')}
+        </g>
+      </svg>
+      ${selNode ? `
+        <div class="team-props">
+          <div class="row" style="justify-content:space-between;margin-bottom:12px;">
+            <strong style="font-size:14px;color:#fff">${escapeHtml(selNode.name || selNode.type)}</strong>
+            <button class="btn sm danger" onclick="deleteSelectedNode()">Delete</button>
+          </div>
+          <label class="lbl">Label / Name</label>
+          <input class="input" id="prop-name" value="${escapeAttr(selNode.name || '')}" oninput="updateProp('name', this.value)">
+          <label class="lbl">Role Type</label>
+          <select class="input" onchange="updateProp('type', this.value)">
+            ${NODE_TYPES.map(nt => `<option value="${nt.type}" ${selNode.type === nt.type ? 'selected' : ''}>${nt.label}</option>`).join('')}
+          </select>
+          <label class="lbl">Model</label>
+          <input class="input" id="prop-model" value="${escapeAttr(selNode.model || '')}" placeholder="e.g. claude-sonnet-4-6, gpt-4o, gemini-2.5-pro" oninput="updateProp('model', this.value)">
+          <label class="lbl">Slash Command Trigger</label>
+          <input class="input" id="prop-command" value="${escapeAttr(selNode.command || '')}" placeholder="e.g. /agent, /boss, /worker" oninput="updateProp('command', this.value)">
+          <label class="lbl">System Prompt Guidance</label>
+          <textarea class="input" rows="4" oninput="updateProp('systemPrompt', this.value)">${escapeHtml(selNode.systemPrompt || '')}</textarea>
+        </div>
+      ` : ''}
+    </div>
+    <div class="team-hint">Drag nodes to position. Click "Connect" then source and target node to link pipeline. Workflow: Agent receives user prompt -> Boss creates sub-plans -> Workers execute in parallel -> Agent merges and delivers response.</div>
+  `;
+
+  attachCanvasEvents();
+}
+
+function renderNode(n) {
+  const nt = NODE_TYPES.find(t => t.type === n.type) || NODE_TYPES[0];
+  const isSelected = editorState.selected === n.id;
+  const isConnect = editorState.connectFrom === n.id;
+  const stroke = isConnect ? '#38bdf8' : (isSelected ? '#60a5fa' : '#3f3f46');
+  const strokeW = (isSelected || isConnect) ? 3 : 1.5;
+
+  return `
+    <g class="team-node" data-id="${escapeAttr(n.id)}" transform="translate(${n.x || 80}, ${n.y || 80})" style="cursor:move;">
+      <rect width="140" height="60" rx="10" fill="#202024" stroke="${stroke}" stroke-width="${strokeW}"/>
+      <circle cx="16" cy="30" r="6" fill="${nt.color}"/>
+      <text x="30" y="28" fill="#fff" font-size="13" font-weight="600">${escapeHtml(n.name || n.type)}</text>
+      <text x="30" y="44" fill="#a1a1aa" font-size="11">${escapeHtml(n.model || 'auto')}</text>
+    </g>
+  `;
+}
+
+function edgePath(a, b) {
+  const x1 = (a.x || 0) + 140, y1 = (a.y || 0) + 30;
+  const x2 = b.x || 0, y2 = (b.y || 0) + 30;
+  if (x2 < x1) {
+    const midY = Math.max(y1, y2) + 60;
+    return `M ${x1 - 70} ${y1 + 30} C ${x1 - 70} ${midY} ${x2 + 70} ${midY} ${x2 + 70} ${y2 + 30}`;
+  }
+  const dx = (x2 - x1) / 2;
+  return `M ${x1} ${y1} C ${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
+}
+
+function renderConnections() {
+  const byId = {};
+  editorState.nodes.forEach(n => byId[n.id] = n);
+  const defs = `<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#3b82f6"/></marker></defs>`;
+  const paths = (editorState.connections || []).map((c, i) => {
+    const a = byId[c.from], b = byId[c.to];
+    if (!a || !b) return '';
+    return `
+      <path d="${edgePath(a, b)}" stroke="transparent" stroke-width="12" fill="none" style="cursor:pointer;" onclick="deleteConn(${i})"/>
+      <path d="${edgePath(a, b)}" stroke="#3b82f6" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    `;
+  }).join('');
+  return defs + paths;
+}
+
+function attachCanvasEvents() {
+  let draggingNode = null;
+  let offset = { x: 0, y: 0 };
+  const svg = document.getElementById('team-canvas');
+
+  editorState.nodes.forEach(n => {
+    const el = svg.querySelector(`[data-id="${n.id}"]`);
+    if (!el) return;
+
+    el.onmousedown = (e) => {
+      e.stopPropagation();
+      if (editorState.connectMode) {
+        if (!editorState.connectFrom) {
+          editorState.connectFrom = n.id;
+          renderEditor();
+        } else if (editorState.connectFrom !== n.id) {
+          editorState.connections.push({ from: editorState.connectFrom, to: n.id });
+          editorState.connectFrom = null;
+          editorState.connectMode = false;
+          renderEditor();
+        }
+        return;
+      }
+      editorState.selected = n.id;
+      draggingNode = n;
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+      offset.x = loc.x - (n.x || 0);
+      offset.y = loc.y - (n.y || 0);
+      renderEditor();
+    };
+  });
+
+  svg.onmousemove = (e) => {
+    if (!draggingNode) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    draggingNode.x = Math.max(10, Math.round(loc.x - offset.x));
+    draggingNode.y = Math.max(10, Math.round(loc.y - offset.y));
+    const el = svg.querySelector(`[data-id="${draggingNode.id}"]`);
+    if (el) el.setAttribute('transform', `translate(${draggingNode.x}, ${draggingNode.y})`);
+    const connGroup = svg.querySelector('#canvas-g');
+    if (connGroup) {
+      renderEditor();
+    }
+  };
+
+  svg.onmouseup = () => { draggingNode = null; };
+  svg.onclick = (e) => {
+    if (e.target === svg) {
+      editorState.selected = null;
+      editorState.connectFrom = null;
+      editorState.connectMode = false;
+      renderEditor();
+    }
+  };
+}
+
+function toggleConnect() {
+  editorState.connectMode = !editorState.connectMode;
+  editorState.connectFrom = null;
+  renderEditor();
+}
+
+function deleteConn(i) {
+  editorState.connections.splice(i, 1);
+  renderEditor();
+}
+
+function addNode(type) {
+  const count = editorState.nodes.filter(n => n.type === type).length + 1;
+  const id = `${type}-${Date.now().toString().slice(-4)}`;
+  editorState.nodes.push({
+    id,
+    type,
+    name: type.charAt(0).toUpperCase() + type.slice(1) + ' ' + count,
+    model: DEFAULT_TEAM_MODEL,
+    command: `/${type}`,
+    x: 100 + (editorState.nodes.length * 30),
+    y: 100 + (editorState.nodes.length * 30)
+  });
+  editorState.selected = id;
+  renderEditor();
+}
+
+function deleteSelectedNode() {
+  if (!editorState.selected) return;
+  const id = editorState.selected;
+  editorState.nodes = editorState.nodes.filter(n => n.id !== id);
+  editorState.connections = editorState.connections.filter(c => c.from !== id && c.to !== id);
+  editorState.selected = null;
+  renderEditor();
+}
+
+function updateProp(key, val) {
+  if (!editorState.selected) return;
+  const n = editorState.nodes.find(n => n.id === editorState.selected);
+  if (n) {
+    n[key] = val;
+    const el = document.querySelector(`[data-id="${n.id}"] text`);
+    if (el && key === 'name') el.textContent = val;
+  }
+}
+
+function saveCurrentTeam() {
+  const name = document.getElementById('te-name').value.trim();
+  const slug = document.getElementById('te-slug').value.trim();
+  if (!name || !slug) return alert('Name and slug are required');
+  editorState.team.name = name;
+  editorState.team.slug = slug;
+  editorState.team.nodes = editorState.nodes;
+  editorState.team.connections = editorState.connections;
+
+  const idx = teams.findIndex(t => t.id === editorState.team.id);
+  if (idx >= 0) teams[idx] = editorState.team;
+  else teams.push(editorState.team);
+
+  saveTeams();
+  closeEditor();
+}
+
+document.getElementById('btn-new-team').onclick = () => {
+  openEditor({
+    id: 'team-' + Date.now(),
+    name: 'New Orchestrator Team',
+    slug: 'team-' + Math.floor(Math.random() * 1000),
+    nodes: [
+      { id: 'agent-1', type: 'agent', name: 'Agent', model: 'gemini-2.5-flash', command: '/agent', x: 80, y: 180 },
+      { id: 'boss-1', type: 'planner', name: 'Boss', model: 'gemini-2.5-pro', command: '/boss', x: 280, y: 180 },
+      { id: 'worker-1', type: 'worker', name: 'Worker', model: 'deepseek-v3', command: '/worker', x: 480, y: 180 }
+    ],
+    connections: [
+      { from: 'agent-1', to: 'boss-1' },
+      { from: 'boss-1', to: 'worker-1' },
+      { from: 'worker-1', to: 'agent-1' }
+    ]
+  });
+};
+
+function escapeHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeAttr(s) { return String(s || '').replace(/"/g,'&quot;'); }
+
+renderTeamsList();
+</script>
+</body>
+</html>

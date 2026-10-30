@@ -1212,6 +1212,8 @@
     "modelLockout": "Model Lockout",
     "settingsAdvanced": "Advanced",
     "omniProxySection": "OmniProxy",
+    "team": "Team Orchestrator",
+    "teamSubtitle": "Multi-model team workflow",
     "quotaTracker": "Provider Quota",
     "providerQuota": "Provider Quota",
     "runtime": "Runtime",

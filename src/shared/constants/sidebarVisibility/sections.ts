@@ -86,6 +86,15 @@ const OMNI_PROXY_ITEMS: readonly SidebarItemDefinition[] = [
     subtitleKey: "costsQuotaShareSubtitle",
     icon: "pie_chart",
   },
+  {
+    id: "team",
+    href: "/team",
+    i18nKey: "team",
+    labelFallback: "Team Orchestrator",
+    subtitleKey: "teamSubtitle",
+    subtitleFallback: "Multi-model team workflow",
+    icon: "groups",
+  },
 ];
 
 export const COMPRESSION_CONTEXT_GROUP: SidebarItemGroup = {
